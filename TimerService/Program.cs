@@ -3,43 +3,114 @@ using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace TimerService
 {
-    internal class Program
+    internal class NotificationTimerWrapper
     {
-        private static System.Timers.Timer notificationTimer;
+        private static int _totalTimerCount = 0;
 
-        private static int notificationCount = 0;
+        private readonly System.Timers.Timer _timer;
+        private readonly string? _notificationMessage;
+        private int _notificationCount;
+        public readonly string Identifier;
+        public readonly int Id;
 
-        private static DateTime startTime;
-        private static int startExp;
-
-        private static void Main(string[] args)
+        public NotificationTimerWrapper(TimeSpan timerTime, string? notificationMessage, string identifier)
         {
-            Console.WriteLine("Little timer service to help with afk nmz, press Ctrl+C to stop.");
+            _totalTimerCount++;
+            Id = _totalTimerCount;
+            Identifier = identifier;
+            _notificationCount = 0;
+            _notificationMessage = notificationMessage;
+            _timer = new System.Timers.Timer(timerTime);
+            _timer.Elapsed += TimerElapsed;
+            _timer.AutoReset = true;
+            _timer.Enabled = true;
+        }
 
-            Console.WriteLine("How many seconds do you want the interval to be?");
+        private void TimerElapsed(object? sender, ElapsedEventArgs e)
+        {
+            ShowNotification();
+        }
 
-            var intervalSeconds = GetNumber();
-            var intervalMs = intervalSeconds * 1000;
-
-            Console.WriteLine($"Windows Notifications every {intervalSeconds} seconds. Enter start exp to start.");
-
-            startExp = Convert.ToInt32(Console.ReadLine());
-
-            startTime = DateTime.Now;
-
-            notificationTimer = new System.Timers.Timer(intervalMs);
-            notificationTimer.Elapsed += OnTimedEvent;
-            notificationTimer.AutoReset = true;
-            notificationTimer.Enabled = true;
-
-            while (true)
+        private void ShowNotification()
+        {
+            try
             {
-                Console.WriteLine("Enter your new XP:");
-                LogExperience(GetNumber());
+                _notificationCount++;
+                new ToastContentBuilder()
+                    .AddText(_notificationMessage)
+                    .AddText($"This is your #{_notificationCount} scheduled notification!").Show();
+            }
+            catch
+            {
+                // discard
             }
         }
 
-        private static int GetNumber()
+        public void StopTimer()
+        {
+            _timer.Stop();
+        }
+
+        public void WriteIdentifier()
+        {
+            Console.WriteLine($"{Id}. {Identifier}");
+        }
+    }
+
+    internal class ProgramPathOption(int id, string text, Action programPath)
+    {
+        public int Id = id;
+
+        public void WriteMessage()
+        {
+            Console.WriteLine(text);
+        }
+
+        public void ExecutePath()
+        {
+            programPath.Invoke();
+        }
+    }
+
+    internal class ProgramPathOptionsCollection(List<ProgramPathOption> programPathOptions)
+    {
+        public ProgramPathOptionsCollection() : this([])
+        {
+        }
+
+        public void AddProgramPathOption(ProgramPathOption programPathOption)
+        {
+            programPathOptions.Add(programPathOption);
+        }
+
+        public bool OptionExists(int id)
+        {
+            return programPathOptions.Any(p => p.Id == id);
+        }
+
+        public void WriteAllMessages()
+        {
+            programPathOptions.ForEach(p => p.WriteMessage());
+        }
+
+        public void RunSelectedOption()
+        {
+            Console.Write("Your pick: ");
+            var selectedOption = Helpers.GetNumber();
+
+            if (OptionExists(selectedOption))
+            {
+                var selectedProgramPathOption = programPathOptions.First(p => p.Id == selectedOption);
+                selectedProgramPathOption.ExecutePath();
+            }
+
+            Console.WriteLine("Not a valid option.");
+        }
+    }
+
+    internal class Helpers
+    {
+        public static int GetNumber()
         {
             var flag = true;
             var result = 0;
@@ -59,37 +130,105 @@ namespace TimerService
 
             return result;
         }
+    }
 
-        private static void LogExperience(int newExp)
+    internal class Program
+    {
+        private static bool _running = true;
+
+        private static readonly List<NotificationTimerWrapper> Timers = [];
+
+        private static void Main(string[] args)
         {
-            var delta = newExp - startExp;
-            var elapsedTime = DateTime.Now - startTime;
+            Console.WriteLine("Little timer service to help with afk nmz, press Ctrl+C to stop.");
+            Console.WriteLine("It will constantly run a timer based on a given amount of seconds and send windows notifications based on your provided message.");
 
-            double hoursElapsed = elapsedTime.TotalHours;
+            var programPathOptions = new ProgramPathOptionsCollection();
 
-            double expPerHour = hoursElapsed > 0 ? delta / hoursElapsed : 0;
+            programPathOptions.AddProgramPathOption(new ProgramPathOption(1, "1. Setup new timer?", SetupNewTimer));
+            programPathOptions.AddProgramPathOption(new ProgramPathOption(2, "2. Stop a timer?", StopATimer));
+            programPathOptions.AddProgramPathOption(new ProgramPathOption(3, "3. Stop application?", StopApplication));
 
-            Console.WriteLine($"XP Per Hour: {expPerHour:F2}");
+            while (_running)
+            {
+                programPathOptions.WriteAllMessages();
+                programPathOptions.RunSelectedOption();
+            }
         }
 
-        private static void OnTimedEvent(object? sender, ElapsedEventArgs e)
+        private static void StopApplication()
         {
-            ShowNotification();
+            Console.WriteLine("Closing app.");
+            Timers.ForEach(t => t.StopTimer());
+            Timers.Clear();
+            Thread.Sleep(500);
+            _running = false;
         }
 
-        private static void ShowNotification()
+        private static void StopATimer()
         {
-            try
+            Console.WriteLine("Stop a timer selected.");
+            if (Timers.Count == 0)
             {
-                notificationCount++;
-                new ToastContentBuilder()
-                    .AddText("Reminder")
-                    .AddText($"This is your #{notificationCount} scheduled notification!").Show();
+                Console.WriteLine("No timers to stop.");
+                return;
             }
-            catch
+
+            Timers.ForEach(t => t.WriteIdentifier());
+            Console.WriteLine("Which timer would you like to stop?");
+            Console.Write("Your pick: ");
+
+            var selectedTimer = Helpers.GetNumber();
+
+            var timer = Timers.FirstOrDefault(t => t.Id == selectedTimer);
+
+            if (timer is null)
             {
-                // discard
+                Console.WriteLine("No timer with that id found.");
+                return;
             }
+
+            timer.StopTimer();
+            Timers.Remove(timer);
+        }
+
+        private static void SetupNewTimer()
+        {
+            Console.WriteLine("Setup new timer selected.");
+
+            Console.WriteLine("How many second should the timer be?");
+            Console.Write("Seconds: ");
+
+            var seconds = Helpers.GetNumber();
+
+            if (seconds <= 0)
+            {
+                Console.WriteLine("Timespan can not be less than or equal to zero seconds.");
+                return;
+            }
+
+            Console.WriteLine("What would you like to name the timer? Should be unique.");
+            Console.Write("Name: ");
+
+            var givenName = Console.ReadLine();
+
+            if (Timers.Any(t => t.Identifier == givenName))
+            {
+                Console.WriteLine("Name is not unique.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(givenName))
+            {
+                Console.WriteLine("An empty name is not valid.");
+                return;
+            }
+
+            Console.WriteLine("What message should the windows notification show?");
+            Console.Write("Message: ");
+            var givenMessage = Console.ReadLine();
+
+            Timers.Add(new NotificationTimerWrapper(TimeSpan.FromSeconds(seconds), givenMessage, givenName));
         }
     }
 }
