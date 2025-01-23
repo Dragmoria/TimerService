@@ -103,8 +103,10 @@ namespace TimerService
                 var selectedProgramPathOption = programPathOptions.First(p => p.Id == selectedOption);
                 selectedProgramPathOption.ExecutePath();
             }
-
-            Console.WriteLine("Not a valid option.");
+            else
+            {
+                Console.WriteLine("Not a valid option.");
+            }
         }
     }
 
