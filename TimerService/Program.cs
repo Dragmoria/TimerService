@@ -5,7 +5,7 @@ namespace TimerService
 {
     internal class NotificationTimerWrapper
     {
-        private static int _totalTimerCount = 0;
+        private static int _totalTimerCount;
 
         private readonly System.Timers.Timer _timer;
         private readonly string? _notificationMessage;
