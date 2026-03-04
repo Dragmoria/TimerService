@@ -49,6 +49,17 @@ namespace TimerService
         public void StopTimer()
         {
             _timer.Stop();
+            _timer.Enabled = false;
+        }
+
+        public void RestartTimer()
+        {
+            // reset internal state
+            _notificationCount = 0;
+
+            // restart timer
+            _timer.Stop();
+            _timer.Start();
         }
 
         public void WriteIdentifier()
@@ -150,6 +161,7 @@ namespace TimerService
             programPathOptions.AddProgramPathOption(new ProgramPathOption(1, "1. Setup new timer?", SetupNewTimer));
             programPathOptions.AddProgramPathOption(new ProgramPathOption(2, "2. Stop a timer?", StopATimer));
             programPathOptions.AddProgramPathOption(new ProgramPathOption(3, "3. Stop application?", StopApplication));
+            programPathOptions.AddProgramPathOption(new ProgramPathOption(4, "4. Restart a timer?", RestartATimer));
 
             while (_running)
             {
@@ -192,6 +204,33 @@ namespace TimerService
 
             timer.StopTimer();
             Timers.Remove(timer);
+        }
+
+        private static void RestartATimer()
+        {
+            Console.WriteLine("Restart a timer selected.");
+            if (Timers.Count == 0)
+            {
+                Console.WriteLine("No timers to restart.");
+                return;
+            }
+
+            Timers.ForEach(t => t.WriteIdentifier());
+            Console.WriteLine("Which timer would you like to restart?");
+            Console.Write("Your pick: ");
+
+            var selectedTimer = Helpers.GetNumber();
+
+            var timer = Timers.FirstOrDefault(t => t.Id == selectedTimer);
+
+            if (timer is null)
+            {
+                Console.WriteLine("No timer with that id found.");
+                return;
+            }
+
+            timer.RestartTimer();
+            Console.WriteLine("Timer restarted.");
         }
 
         private static void SetupNewTimer()
